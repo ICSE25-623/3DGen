@@ -1,0 +1,5 @@
+entrypoint
+typedef struct _message {
+  UINT8 first { first > 42 };
+  UINT8 second;
+} message;
