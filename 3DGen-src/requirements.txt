@@ -1,0 +1,15 @@
+chromadb==0.3.29 
+colorlog==6.8.0
+langchain==0.1.0
+langchain-openai==0.0.2.post1
+langchain-community==0.0.12
+openai==1.7.2
+pyautogen==0.2.6
+python-dotenv==1.0.0
+beautifulsoup4==4.12.2
+huggingface-hub==0.16.4
+faiss-cpu==1.7.4
+pyshark==0.6.0
+scapy==2.5.0
+tenacity==8.2.3
+tqdm==4.66.1

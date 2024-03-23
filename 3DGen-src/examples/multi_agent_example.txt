@@ -1,0 +1,256 @@
+Helpful Example of translating UDP RFC768 to 3d code:
+
+Specification:
+User Datagram Protocol
+Format
+------
+
+                                    
+                  0      7 8     15 16    23 24    31  
+                 +--------+--------+--------+--------+ 
+                 |     Source      |   Destination   | 
+                 |      Port       |      Port       | 
+                 +--------+--------+--------+--------+ 
+                 |                 |                 | 
+                 |     Length      |    Checksum     | 
+                 +--------+--------+--------+--------+ 
+                 |                                     
+                 |          data octets ...            
+                 +---------------- ...                 
+
+                      User Datagram Header Format
+
+Fields
+------
+
+Source Port is an optional field, when meaningful, it indicates the port
+of the sending  process,  and may be assumed  to be the port  to which a
+reply should  be addressed  in the absence of any other information.  If
+not used, a value of zero is inserted.
+
+Fields
+
+Destination  Port has a meaning  within  the  context  of  a  particular
+internet destination address.
+
+Length  is the length  in octets  of this user datagram  including  this
+header  and the data.   (This  means  the minimum value of the length is
+eight.)
+
+Checksum is the 16-bit one's complement of the one's complement sum of a
+pseudo header of information from the IP header, the UDP header, and the
+data,  padded  with zero octets  at the end (if  necessary)  to  make  a
+multiple of two octets.
+
+The pseudo  header  conceptually prefixed to the UDP header contains the
+source  address,  the destination  address,  the protocol,  and the  UDP
+length.   This information gives protection against misrouted datagrams.
+This checksum procedure is the same as is used in TCP.
+
+                  0      7 8     15 16    23 24    31 
+                 +--------+--------+--------+--------+
+                 |          source address           |
+                 +--------+--------+--------+--------+
+                 |        destination address        |
+                 +--------+--------+--------+--------+
+                 |  zero  |protocol|   UDP length    |
+                 +--------+--------+--------+--------+
+
+If the computed  checksum  is zero,  it is transmitted  as all ones (the
+equivalent  in one's complement  arithmetic).   An all zero  transmitted
+checksum  value means that the transmitter  generated  no checksum  (for
+debugging or for higher level protocols that don't care).
+
+User Interface
+--------------
+
+A user interface should allow
+
+  the creation of new receive ports,
+
+  receive  operations  on the receive  ports that return the data octets
+  and an indication of source port and source address,
+
+  and an operation  that allows  a datagram  to be sent,  specifying the
+  data, source and destination ports and addresses to be sent.
+
+
+IP Interface
+-------------
+
+The UDP module  must be able to determine  the  source  and  destination
+internet addresses and the protocol field from the internet header.  One
+possible  UDP/IP  interface  would return  the whole  internet  datagram
+including all of the internet header in response to a receive operation.
+Such an interface  would  also allow  the UDP to pass  a  full  internet
+datagram  complete  with header  to the IP to send.  The IP would verify
+certain fields for consistency and compute the internet header checksum.
+
+
+The final 3d Code:
+
+entrypoint
+typedef struct _UDP_Header
+{
+  UINT16BE SourcePort;
+  UINT16BE DestinationPort;
+  UINT16BE Length;
+  UINT16BE CheckSum;
+} UDP_HEADER;
+
+Module name:
+_UDP_Header
+
+#######################
+Input RFC Sample 1:
+    A message has two fields, with the following properties:
+    - size: a 32-bit integer field whose legal values are 8, 16, and 32.
+    - payload: a field whose contents depends on size:
+        - If size is 8, then the payload is 1 byte
+        - If size if 16, then the payload is 2 bytes
+        - If size is 32, then the payload is 4 bytes
+
+Output 3d code:
+
+    UINT32 enum SIZE {
+        SIZE8 = 8, 
+        SIZE16 = 16,
+        SIZE32 = 32
+    };
+
+    casetype _PAYLOAD (UINT32 size) {
+        switch(size) {
+            case SIZE8:  UINT8  value8;
+            case SIZE16: UINT16 value16;
+            case SIZE32: UINT32 value32;
+        }
+    } PAYLOAD;
+
+    entrypoint typedef struct _MESSAGE {
+        SIZE  size;
+        PAYLOAD(size) payload;
+    } MESSAGE;
+
+Module name:
+_MESSAGE
+
+##########################
+
+Input RFC:
+
+    The protocol contains three messages: START, REPLY, CLOSE.
+    A START message contains three fields:
+        - type: an 8-bit field whose legal values is 0
+        - length: a 32-bit integer field. 
+        - contents: an array of 32-bit big endian integers whose size in bytes is length. 
+
+    A REPLY message contains three fields:
+        - type: an 8-bit field whose legal values is 1
+        - length: a 32-bit integer field. 
+        - contents: an array whose size in bytes is length, containing pairs of requestor_id and response_id each 32-bit big endian integers. 
+
+    A CLOSE message contains of three fields:
+        - type: an 8-bit field whose legal values is 2
+        - length: a 32-bit integer field. 
+        - contents: an array whose size in bytes is length, containing pairs of requestor_id and response_id each 32-bit big endian integers. 
+
+
+Output 3d code:
+
+    typedef UINT32BE START_CONTENT;
+
+    typedef struct _REPLY_CONTENT{
+        UINT32BE requestor_id;
+        UINT32BE response_id;
+    } REPLY_CONTENT;
+
+    typedef struct _CLOSE_CONTENT{
+        UINT32BE requestor_id;
+        UINT32BE response_id;
+    } CLOSE_CONTENT;
+
+    casetype _PAYLOAD(UINT8 message_type){
+        switch(message_type){
+            case 0: START message;
+            case 1: REPLY message;
+            case 2: CLOSE message;
+        }
+    } PAYLOAD;
+
+    entrypoint 
+    typedef struct _MESSAGES{
+        UINT8 message_type {message_type == 0 || message_type == 1 || message_type == 2};
+        UINT32BE length;
+        PAYLOAD(message_type) messages[:byte-size length];
+    } MESSAGES;
+
+Module name:
+_MESSAGES
+
+
+##############################
+INCORRECT Model output:
+    // the array is at least 312 bytes
+    UINT8 Data[:byte-size 312]
+
+Critique and refinement:
+
+    This is inccorect. The notation Data[:byte-size 312] describes a field holding an array of elements whose cumulative size in bytes is 312.
+
+##############################
+
+INCORRECT Model output:
+
+    UINT8 Options[:byte-size (TotalLength - IHL * 5)] { TotalLength >= IHL * 5 };
+
+Critique and refinement:
+
+    3D does not support value constraints on array fields. The constraint should be moved to a scalar field.
+
+    T TotalLength { TotalLength >= IHL * 5 }
+    UINT8 Options[:byte-size (TotalLength - IHL * 5)] ;
+
+##############################
+
+INCORRECT Model output:
+
+    entrypoint typedef struct _boundedSum {
+    UINT32 left;
+    UINT32 right { left + right <= 42 };
+    } boundedSum;
+
+Critique and refinement:
+
+    the expression left + right must be proven to not overflow before evaluating the condition. The correct way of stating the condition is as follows:
+    entrypoint typedef struct _boundedSum {
+        UINT32 left;
+        UINT32 right { left <= 42 && right <= 42 - left };
+    } boundedSum;
+
+##############################
+
+INCORRECT Model output:
+    UINT1 flag {flag.bit == 0 || flag.bit == 1};
+
+Critique and refinement:
+    This is not valid 3D, you cannot access fields in this way. UINT1 is also not an accepted type!! Here is the corection:
+
+    UINT8 flag:1 {flag == 0 || flag == 1};
+
+
+#####################
+
+INCORRECT Model output:
+  UINT16BE  Flags  { 
+                    // Bits 1-5 may be 0, but Bits 6-12 of the Flags must always be 0
+                    ((Flags & 0x03FE) == 0) 
+                };
+
+Critique and refinement:
+
+    The code should separate these two fields:
+
+    UINT16BE  flags_5:5;
+    UINT16BE  flags_6_12:7 { flags_6_12 == 0};
+
+###################################
